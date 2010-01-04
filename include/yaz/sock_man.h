@@ -47,10 +47,23 @@ YAZ_EXPORT
 void yaz_sock_man_destroy(yaz_sock_man_t man);
 
 YAZ_EXPORT
-yaz_sock_chan_t yaz_sock_chan_new(yaz_sock_man_t srv, int fd, void *data);
+yaz_sock_chan_t yaz_sock_chan_new(yaz_sock_man_t srv, int fd, void *data,
+                                  unsigned mask);
 
 YAZ_EXPORT
 void yaz_sock_chan_destroy(yaz_sock_man_t srv, yaz_sock_chan_t p);
+
+YAZ_EXPORT
+void yaz_sock_chan_set_mask(yaz_sock_chan_t chan, unsigned mask);
+
+YAZ_EXPORT
+void yaz_sock_chan_set_max_idle(yaz_sock_chan_t chan, int max_idle);
+
+YAZ_EXPORT
+unsigned yaz_sock_get_mask(yaz_sock_chan_t chan);
+
+YAZ_EXPORT
+void *yaz_sock_chan_get_data(yaz_sock_chan_t chan);
 
 YAZ_END_CDECL
 

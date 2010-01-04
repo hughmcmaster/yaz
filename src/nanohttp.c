@@ -11,7 +11,7 @@
 #include <yaz/comstack.h>
 #include <yaz/nmem.h>
 #include <yaz/log.h>
-#include <yaz/poll.h>
+#include <yaz/sock_man.h>
 #include <assert.h>
 
 typedef struct yaz_nano_srv_s *yaz_nano_srv_t;
@@ -29,7 +29,7 @@ struct yaz_nano_srv_s {
     COMSTACK *cs_listeners;
     size_t num_listeners;
     NMEM nmem;
-    struct yaz_poll_fd *fds;
+    yaz_sock_man_t sock_man;
 };
 
 void yaz_nano_srv_destroy(yaz_nano_srv_t p)
@@ -40,6 +40,7 @@ void yaz_nano_srv_destroy(yaz_nano_srv_t p)
         for (i = 0; i < p->num_listeners; i++)
             if (p->cs_listeners[i])
                 cs_close(p->cs_listeners[i]);
+        yaz_sock_man_destroy(p->sock_man);
         nmem_destroy(p->nmem);
     }
 }
@@ -52,8 +53,6 @@ yaz_nano_srv_t yaz_nano_srv_create(const char **listeners_str)
     for (i = 0; listeners_str[i]; i++)
         ;
     p->nmem = nmem;
-    p->chan_list = 0;
-    p->free_list = 0;
     p->num_listeners = i;
     p->cs_listeners = 
         nmem_malloc(nmem, p->num_listeners * sizeof(*p->cs_listeners));
@@ -82,6 +81,8 @@ yaz_nano_srv_t yaz_nano_srv_create(const char **listeners_str)
                 p->cs_listeners[i] = l; /* success */
         }
     }
+    p->sock_man = yaz_sock_man_new();
+
     /* check if all are OK */
     for (i = 0; i < p->num_listeners; i++)
         if (!p->cs_listeners[i])
@@ -92,10 +93,11 @@ yaz_nano_srv_t yaz_nano_srv_create(const char **listeners_str)
 
     for (i = 0; i < p->num_listeners; i++)
     {
-        struct socket_chan *chan = 
-            socket_chan_new(p, cs_fileno(p->cs_listeners[i]),
-                p->cs_listeners + i);
-        socket_chan_set_mask(chan, yaz_poll_read | yaz_poll_except);
+        yaz_sock_chan_t chan;
+
+        chan = yaz_sock_chan_new(p->sock_man, cs_fileno(p->cs_listeners[i]),
+                                 p->cs_listeners + i,
+                                 yaz_poll_read | yaz_poll_except);
     }    
     return p;
 }
@@ -122,40 +124,6 @@ int yaz_nano_pkg_listener_id(yaz_nano_pkg_t pkg)
 
 yaz_nano_pkg_t yaz_nano_srv_get_pkg(yaz_nano_srv_t p)
 {
-    size_t i;
-    int ret;
-    int num_fds = 0;
-    struct yaz_poll_fd *fds;
-    struct socket_chan *chan = p->chan_list;
-    for (chan = p->chan_list; chan; chan = chan->next)
-        num_fds++;
-    fds = xmalloc(num_fds * sizeof(*fds));
-    for (i = 0, chan = p->chan_list; chan; chan = chan->next)
-    {
-        fds[i].input_mask = chan->mask;
-        fds[i].fd = chan->fd;
-        fds[i].client_data = chan;
-    }
-    ret = yaz_poll(fds, num_fds, 0, 0);
-    if (ret == -1)
-    {
-        yaz_log(YLOG_WARN, "yaz_poll error");
-    }
-    else if (ret == 0)
-    {
-        yaz_log(YLOG_LOG, "yaz_poll timeout");
-    }
-    else
-    {
-        for (i = 0, chan = p->chan_list; chan; chan = chan->next)
-        {
-            if (fds[i].output_mask)
-            {
-                yaz_log(YLOG_LOG, "event on chan=%p", chan);
-            }
-        }
-    }
-    xfree(fds);
     return 0;
 }
 
