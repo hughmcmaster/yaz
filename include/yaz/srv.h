@@ -29,44 +29,56 @@
  * \file
  * \brief socket manager
  */
-#ifndef YAZ_SOCK_MAN_H
-#define YAZ_SOCK_MAN_H
+#ifndef YAZ_SRV_H
+#define YAZ_SRV_H
 
 #include <stddef.h>
 #include <yaz/poll.h>
+#include <yaz/zgdu.h>
 
 YAZ_BEGIN_CDECL
 
-typedef struct yaz_sock_man_s *yaz_sock_man_t;
-typedef struct yaz_sock_chan_s *yaz_sock_chan_t;
+typedef struct yaz_srv_s *yaz_srv_t;
+typedef struct yaz_pkg_s *yaz_pkg_t;
+
+struct cs_session;
+
+typedef void (yaz_srv_gdu_handler_t)(yaz_pkg_t pkg, void *user);
+typedef void *(yaz_srv_session_handler_t)(struct cs_session *cs);
 
 YAZ_EXPORT
-yaz_sock_man_t yaz_sock_man_new(void);
+yaz_srv_t yaz_srv_create(const char **listeners_str);
 
 YAZ_EXPORT
-void yaz_sock_man_destroy(yaz_sock_man_t man);
+void yaz_srv_destroy(yaz_srv_t p);
 
 YAZ_EXPORT
-yaz_sock_chan_t yaz_sock_man_wait(yaz_sock_man_t man);
+void yaz_srv_run(yaz_srv_t p, yaz_srv_session_handler_t *session_handler,
+                 yaz_srv_gdu_handler_t *gdu_handler);
 
 YAZ_EXPORT
-yaz_sock_chan_t yaz_sock_chan_new(yaz_sock_man_t man, int fd, void *data,
-                                  unsigned mask);
+void yaz_pkg_destroy(yaz_pkg_t pkg);
 
 YAZ_EXPORT
-void yaz_sock_chan_destroy(yaz_sock_chan_t p);
+Z_GDU **yaz_pkg_get_gdu(yaz_pkg_t pkg);
 
 YAZ_EXPORT
-void yaz_sock_chan_set_mask(yaz_sock_chan_t chan, unsigned mask);
+ODR yaz_pkg_get_odr(yaz_pkg_t pkg);
 
 YAZ_EXPORT
-void yaz_sock_chan_set_max_idle(yaz_sock_chan_t chan, int max_idle);
+void yaz_pkg_stop_server(yaz_pkg_t pkg);
 
 YAZ_EXPORT
-unsigned yaz_sock_get_mask(yaz_sock_chan_t chan);
+void yaz_pkg_close(yaz_pkg_t pkg);
 
 YAZ_EXPORT
-void *yaz_sock_chan_get_data(yaz_sock_chan_t chan);
+yaz_pkg_t yaz_pkg_create(yaz_pkg_t request_pkg);
+
+YAZ_EXPORT
+Z_GDU *zget_wrap_APDU(ODR o, Z_APDU *apdu);
+
+YAZ_EXPORT
+void yaz_pkg_send(yaz_pkg_t pkg);
 
 YAZ_END_CDECL
 

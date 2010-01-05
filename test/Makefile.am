@@ -5,7 +5,8 @@ check_PROGRAMS = tstxmalloc tsticonv tstnmem tstmatchstr tstwrbuf tstodr \
  tstccl tstlog tstcomstack \
  tstsoap1 tstsoap2 tstodrstack tstlogthread tstxmlquery tstpquery \
  tst_comstack tst_filepath tst_record_conv tst_retrieval tst_tpath \
- tst_timing tst_query_charset tst_oid tst_icu_I18N tst_match_glob tst_rpn2cql
+ tst_timing tst_query_charset tst_oid tst_icu_I18N tst_match_glob \
+ tst_rpn2cql tst_srv
 check_SCRIPTS = tstmarc.sh tstmarccol.sh tstcql2xcql.sh tstcql2pqf.sh tsticu.sh
 
 TESTS = $(check_PROGRAMS) $(check_SCRIPTS)
@@ -47,7 +48,7 @@ tstodrcodec.c tstodrcodec.h: tstodr.asn $(YAZCOMP)
 	cd $(srcdir); $(YAZCOMP) tstodr.asn
 
 LDADD = ../src/libyaz.la
-tst_icu_I18N_LDADD = ../src/libyaz_icu.la $(ICU_LIBS)
+tst_icu_I18N_LDADD = ../src/libyaz.la ../src/libyaz_icu.la $(ICU_LIBS)
 
 CONFIG_CLEAN_FILES=*.log
 
@@ -77,3 +78,5 @@ tst_query_charset_SOURCES = tst_query_charset.c
 tst_icu_I18N_SOURCES = tst_icu_I18N.c
 tst_match_glob_SOURCES = tst_match_glob.c
 tst_rpn2cql_SOURCES = tst_rpn2cql.c
+tst_srv_SOURCES = tst_srv.c
+tst_srv_LDADD =  ../src/libyaz.la $(PTHREAD_LIBS)

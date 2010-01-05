@@ -1,5 +1,6 @@
 
 #include <yaz/sock_man.h>
+#include <yaz/log.h>
 #include <yaz/nmem.h>
 #include <assert.h>
 #include <sys/epoll.h>
@@ -23,7 +24,7 @@ struct yaz_sock_chan_s {
     yaz_sock_chan_t next;
     yaz_sock_chan_t prev;
     int fd;
-    unsigned mask;
+    unsigned input_mask;
     unsigned output_mask;
     int max_idle;
     void *data;
@@ -42,7 +43,7 @@ yaz_sock_man_t yaz_sock_man_new(void)
     man->maxevents = 30;
     man->event_no = 0;
     man->event_ret = 0;
-    man->timeout = 0;
+    man->timeout = -1;
     man->rescan = 0;
     man->events = nmem_malloc(nmem, man->maxevents * sizeof(*man->events));
     if (man->epoll_handle == -1)
@@ -57,9 +58,14 @@ void yaz_sock_man_destroy(yaz_sock_man_t man)
 {
     if (man)
     {
+        while (man->chan_list)
+        {
+            yaz_log(YLOG_WARN, "yaz_sock_man_destroy: closing %p",
+                    man->chan_list);
+            yaz_sock_chan_destroy(man->chan_list);
+        }
         if (man->epoll_handle != -1)
             close(man->epoll_handle);
-        assert(man->chan_list == 0);
         nmem_destroy(man->nmem);
     }
 }
@@ -69,11 +75,11 @@ static void poll_ctl(int op, yaz_sock_chan_t p)
     struct epoll_event event;
 
     event.events = 0;
-    if (p->mask & yaz_poll_read)
+    if (p->input_mask & yaz_poll_read)
         event.events |= EPOLLIN;
-    if (p->mask & yaz_poll_write)
+    if (p->input_mask & yaz_poll_write)
         event.events |= EPOLLOUT;
-    if (p->mask & yaz_poll_except)
+    if (p->input_mask & yaz_poll_except)
         event.events |= EPOLLERR;
 
     event.data.ptr = p;
@@ -99,9 +105,10 @@ yaz_sock_chan_t yaz_sock_chan_new(yaz_sock_man_t srv, int fd, void *data,
     srv->chan_list = p;
 
     p->fd = fd;
-    p->mask = 0;
+    p->input_mask = mask;
+    p->output_mask = 0;
     p->data = data;
-    p->max_idle = 0;
+    p->max_idle = -1;
     p->man = srv;
 
     poll_ctl(EPOLL_CTL_ADD, p);
@@ -112,18 +119,19 @@ static void rescan_timeout(yaz_sock_man_t man)
 {
     if (man->rescan)
     {
-        int timeout = 0;
+        int timeout = -1;
         yaz_sock_chan_t p;
         for (p = man->chan_list; p; p = p->next)
-            if (p->max_idle && (timeout == 0 || p->max_idle < timeout))
+            if (p->max_idle != -1 && (timeout == -1 || p->max_idle < timeout))
                 timeout = p->max_idle;
         man->timeout = timeout;
         man->rescan = 0;
     }
 }
 
-void yaz_sock_chan_destroy(yaz_sock_man_t srv, yaz_sock_chan_t p)
+void yaz_sock_chan_destroy(yaz_sock_chan_t p)
 {
+    yaz_sock_man_t srv = p->man;
     if (p->prev)
         p->prev->next = p->next;
     else
@@ -162,7 +170,7 @@ yaz_sock_chan_t yaz_sock_man_wait(yaz_sock_man_t man)
         }
         man->timeout_list = 0; /* no more timeout events */
     }
-    assert(man->timeout_list = 0);
+    assert(man->timeout_list == 0);
     assert(man->event_no <= man->event_ret);
     if (man->event_no == man->event_ret)
     { /* must wait again */
@@ -202,9 +210,9 @@ yaz_sock_chan_t yaz_sock_man_wait(yaz_sock_man_t man)
 
 void yaz_sock_chan_set_mask(yaz_sock_chan_t chan, unsigned mask)
 {
-    if (chan->mask != mask)
+    if (chan->input_mask != mask)
     {
-        chan->mask = mask;
+        chan->input_mask = mask;
         poll_ctl(EPOLL_CTL_MOD, chan);
     }
 }
@@ -220,7 +228,7 @@ void yaz_sock_chan_set_max_idle(yaz_sock_chan_t chan, int max_idle)
 
 unsigned yaz_sock_get_mask(yaz_sock_chan_t chan)
 {
-    return chan->mask;
+    return chan->output_mask;
 }
 
 void *yaz_sock_chan_get_data(yaz_sock_chan_t chan)

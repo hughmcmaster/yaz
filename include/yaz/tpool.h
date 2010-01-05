@@ -29,44 +29,26 @@
  * \file
  * \brief socket manager
  */
-#ifndef YAZ_SOCK_MAN_H
-#define YAZ_SOCK_MAN_H
+#ifndef YAZ_TPOOL_H
+#define YAZ_TPOOL_H
 
 #include <stddef.h>
-#include <yaz/poll.h>
+
 
 YAZ_BEGIN_CDECL
 
-typedef struct yaz_sock_man_s *yaz_sock_man_t;
-typedef struct yaz_sock_chan_s *yaz_sock_chan_t;
+typedef struct yaz_tpool_s *yaz_tpool_t;
 
 YAZ_EXPORT
-yaz_sock_man_t yaz_sock_man_new(void);
+void yaz_tpool_add(yaz_tpool_t p, void *data);
 
 YAZ_EXPORT
-void yaz_sock_man_destroy(yaz_sock_man_t man);
+void yaz_tpool_destroy(yaz_tpool_t p);
 
 YAZ_EXPORT
-yaz_sock_chan_t yaz_sock_man_wait(yaz_sock_man_t man);
-
-YAZ_EXPORT
-yaz_sock_chan_t yaz_sock_chan_new(yaz_sock_man_t man, int fd, void *data,
-                                  unsigned mask);
-
-YAZ_EXPORT
-void yaz_sock_chan_destroy(yaz_sock_chan_t p);
-
-YAZ_EXPORT
-void yaz_sock_chan_set_mask(yaz_sock_chan_t chan, unsigned mask);
-
-YAZ_EXPORT
-void yaz_sock_chan_set_max_idle(yaz_sock_chan_t chan, int max_idle);
-
-YAZ_EXPORT
-unsigned yaz_sock_get_mask(yaz_sock_chan_t chan);
-
-YAZ_EXPORT
-void *yaz_sock_chan_get_data(yaz_sock_chan_t chan);
+yaz_tpool_t yaz_tpool_create(void (*work_handler)(void *work_data),
+                             void (*work_destroy)(void *work_data),
+                             size_t no_threads);
 
 YAZ_END_CDECL
 
