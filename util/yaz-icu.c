@@ -34,6 +34,7 @@ struct config_t {
     int xmloutput;
     int sortoutput;
     int org_output;
+    int count;
     yaz_icu_chain_t chain;
     FILE * infile;
     FILE * outfile;
@@ -48,6 +49,7 @@ void print_option_error(const struct config_t *p_config)
             "   -s              Show sort normalization key\n"
             "   -o              Show org positions\n"
             "   -x              XML output instread of text\n"
+            "   -C n            Perform conversions n times (instead of once)\n"
             "\n"
             "Examples:\n"
             "cat hugetextfile.txt | ./yaz-icu -c config.xml \n"
@@ -80,15 +82,19 @@ void read_params(int argc, char **argv, struct config_t *p_config)
     p_config->infile = 0;
     p_config->outfile = stdout;
     p_config->org_output = 0;
+    p_config->count = 1;
 
     /* set up command line parameters */
 
-    while ((ret = options("c:op:sx", argv, argc, &arg)) != -2)
+    while ((ret = options("c:C:op:sx", argv, argc, &arg)) != -2)
     {
         switch (ret)
         {
         case 'c':
             strcpy(p_config->conffile, arg);
+            break;
+        case 'C':
+            p_config->count = atoi(arg);
             break;
         case 'p':
             strcpy(p_config->print, arg);
@@ -468,64 +474,68 @@ static void process_text_file(struct config_t *p_config)
     {
         WRBUF sw = wrbuf_alloc();
         WRBUF cdata = wrbuf_alloc();
-        int success = icu_chain_assign_cstr(p_config->chain, line, &status);
-        line_count++;
-
-        while (success && icu_chain_next_token(p_config->chain, &status))
+        int i;
+        for (i = 0; i < p_config->count; i++)
         {
-            if (U_FAILURE(status))
-                success = 0;
-            else
+            int success = icu_chain_assign_cstr(p_config->chain, line, &status);
+            line_count++;
+            while (success && icu_chain_next_token(p_config->chain, &status))
             {
-                size_t start, len;
-                const char *sortkey = icu_chain_token_sortkey(p_config->chain);
-
-                icu_chain_get_org_info(p_config->chain, &start, &len);
-                wrbuf_rewind(sw);
-                wrbuf_puts_escaped(sw, sortkey);
-                token_count++;
-                if (p_config->xmloutput)
-                {
-                    fprintf(p_config->outfile,
-                            "<token id=\"%lu\" line=\"%lu\"",
-                            token_count, line_count);
-
-                    wrbuf_rewind(cdata);
-                    wrbuf_xmlputs(cdata, icu_chain_token_norm(p_config->chain));
-                    fprintf(p_config->outfile, " norm=\"%s\"",
-                            wrbuf_cstr(cdata));
-
-                    wrbuf_rewind(cdata);
-                    wrbuf_xmlputs(cdata, icu_chain_token_display(p_config->chain));
-                    fprintf(p_config->outfile, " display=\"%s\"",
-                            wrbuf_cstr(cdata));
-
-                    if (p_config->sortoutput)
-                    {
-                        wrbuf_rewind(cdata);
-                        wrbuf_xmlputs(cdata, wrbuf_cstr(sw));
-                        fprintf(p_config->outfile, " sortkey=\"%s\"",
-                                wrbuf_cstr(cdata));
-                    }
-                    fprintf(p_config->outfile, "/>\n");
-                }
+                if (U_FAILURE(status))
+                    success = 0;
                 else
                 {
-                    fprintf(p_config->outfile, "%lu %lu '%s' '%s'",
-                            token_count,
-                            line_count,
-                            icu_chain_token_norm(p_config->chain),
-                            icu_chain_token_display(p_config->chain));
-                    if (p_config->sortoutput)
+                    size_t start, len;
+                    const char *sortkey =
+                        icu_chain_token_sortkey(p_config->chain);
+                    icu_chain_get_org_info(p_config->chain, &start, &len);
+                    wrbuf_rewind(sw);
+                    wrbuf_puts_escaped(sw, sortkey);
+                    if (i == 0)
+                        token_count++;
+                    if (i > 0)
+                        ;  /* only output on first iteration */
+                    else if (p_config->xmloutput)
                     {
-                        fprintf(p_config->outfile, " '%s'", wrbuf_cstr(sw));
+                        fprintf(p_config->outfile,
+                                "<token id=\"%lu\" line=\"%lu\"",
+                                token_count, line_count);
+                        wrbuf_rewind(cdata);
+                        wrbuf_xmlputs(cdata,
+                                      icu_chain_token_norm(p_config->chain));
+                        fprintf(p_config->outfile, " norm=\"%s\"",
+                                wrbuf_cstr(cdata));
+                        wrbuf_rewind(cdata);
+                        wrbuf_xmlputs(cdata, icu_chain_token_display(p_config->chain));
+                        fprintf(p_config->outfile, " display=\"%s\"",
+                                wrbuf_cstr(cdata));
+                        if (p_config->sortoutput)
+                        {
+                            wrbuf_rewind(cdata);
+                            wrbuf_xmlputs(cdata, wrbuf_cstr(sw));
+                            fprintf(p_config->outfile, " sortkey=\"%s\"",
+                                    wrbuf_cstr(cdata));
+                        }
+                        fprintf(p_config->outfile, "/>\n");
                     }
-                    if (p_config->org_output)
+                    else
                     {
-                        fprintf(p_config->outfile, " %ld+%ld",
-                                (long) start, (long) len);
+                        fprintf(p_config->outfile, "%lu %lu '%s' '%s'",
+                                token_count,
+                                line_count,
+                                icu_chain_token_norm(p_config->chain),
+                                icu_chain_token_display(p_config->chain));
+                        if (p_config->sortoutput)
+                        {
+                            fprintf(p_config->outfile, " '%s'", wrbuf_cstr(sw));
+                        }
+                        if (p_config->org_output)
+                        {
+                            fprintf(p_config->outfile, " %ld+%ld",
+                                    (long) start, (long) len);
+                        }
+                        fprintf(p_config->outfile, "\n");
                     }
-                    fprintf(p_config->outfile, "\n");
                 }
             }
         }
@@ -552,6 +562,8 @@ int main(int argc, char **argv)
 #if YAZ_HAVE_ICU
     struct config_t config;
 
+    xmlInitParser();
+    LIBXML_TEST_VERSION
     read_params(argc, argv, &config);
 
     if (config.conffile && strlen(config.conffile))
@@ -561,6 +573,7 @@ int main(int argc, char **argv)
         print_info(&config);
 
     u_cleanup();
+    xmlCleanupParser();
 #else /* YAZ_HAVE_ICU */
 
     printf("ICU not available on your system.\n"
@@ -570,7 +583,6 @@ int main(int argc, char **argv)
 
     exit(3);
 #endif /* YAZ_HAVE_ICU */
-
     return 0;
 }
 
