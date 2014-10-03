@@ -112,6 +112,22 @@ void icu_transform_destroy(struct icu_transform *transform)
     }
 }
 
+void icu_transform_trans2(struct icu_transform *transform,
+                          struct icu_buf_utf16 *dest16,
+                          UErrorCode *status)
+{
+    assert(transform);
+    assert(dest16);
+
+    if (!dest16->utf16)
+        return;
+
+    utrans_transUChars(transform->trans,
+                       dest16->utf16, &(dest16->utf16_len),
+                       dest16->utf16_cap,
+                       0, &(dest16->utf16_len), status);
+}
+
 int icu_transform_trans(struct icu_transform *transform,
                         struct icu_buf_utf16 *dest16,
                         const struct icu_buf_utf16 *src16,

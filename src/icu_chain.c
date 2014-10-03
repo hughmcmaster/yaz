@@ -441,10 +441,14 @@ struct icu_buf_utf16 *icu_iter_invoke(yaz_icu_iter_t iter,
         case ICU_chain_step_type_transliterate:
             if (dst)
             {
+#if 1
+                icu_transform_trans2(step->u.transform, dst, &iter->status);
+#else
                 struct icu_buf_utf16 *src = dst;
                 dst = icu_buf_utf16_create(0);
                 icu_transform_trans(step->u.transform, dst, src, &iter->status);
                 icu_buf_utf16_destroy(src);
+#endif
             }
             break;
         case ICU_chain_step_type_display:

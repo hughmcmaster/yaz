@@ -156,6 +156,9 @@ int icu_transform_trans(struct icu_transform *transform,
                         struct icu_buf_utf16 *dest16,
                         const struct icu_buf_utf16 *src16,
                         UErrorCode *status);
+void icu_transform_trans2(struct icu_transform *transform,
+                          struct icu_buf_utf16 *dest16,
+                          UErrorCode *status);
 
 struct icu_chain_step;
 
