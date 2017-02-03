@@ -22,6 +22,7 @@
 #include <yaz/wrbuf.h>
 #include <yaz/yaz-util.h>
 #include <yaz/nmem_xml.h>
+#include <yaz/log.h>
 
 #if YAZ_HAVE_XML2
 #include <libxml/tree.h>
@@ -187,15 +188,23 @@ static int yaz_marc_read_xml_leader(yaz_marc_t mt, const xmlNode **ptr_p,
     int length_implementation;
     const char *leader = 0;
     const xmlNode *ptr = *ptr_p;
+    char leader0[24];
+    int marc_xml = 0; /* whether we have MARCXML */
 
-    for(; ptr; ptr = ptr->next)
+    for (; ptr; ptr = ptr->next)
         if (ptr->type == XML_ELEMENT_NODE)
         {
             if ( !strcmp( (const char *) ptr->name, "leader") ||
                  (!strncmp((const char *) ptr->name, "l", 1) ))
             {
                 xmlNode *p = ptr->children;
-                for(; p; p = p->next)
+                if (ptr->ns && ptr->ns->href)
+                {
+                    if (!strcmp((const char *) ptr->ns->href,
+                                "http://www.loc.gov/MARC21/slim"))
+                        marc_xml = 1;
+                }
+                for (; p; p = p->next)
                     if (p->type == XML_TEXT_NODE)
                         leader = (const char *) p->content;
                 ptr = ptr->next;
@@ -206,6 +215,15 @@ static int yaz_marc_read_xml_leader(yaz_marc_t mt, const xmlNode **ptr_p,
     {
         yaz_marc_cprintf(mt, "Missing leader. Inserting fake leader");
         leader = "00000nam a22000000a 4500";
+    }
+    else if (marc_xml)
+    {
+        memcpy(leader0, leader, 24);
+        leader0[10] = '2';
+        leader0[11] = '2';
+        leader0[20] = '4';
+        leader0[21] = '5';
+        leader = leader0;
     }
     if (strlen(leader) != 24)
     {
@@ -364,6 +382,10 @@ int yaz_marc_read_xml(yaz_marc_t mt, const xmlNode *ptr)
         {
             if (!strcmp((const char *) ptr->name, "record"))
             {
+                if (ptr->ns && ptr->ns->href)
+                {
+                    yaz_log(YLOG_LOG, "namespace=%s", ptr->ns->href);
+                }
                 format = YAZ_MARC_MARCXML;
                 break;
             }
