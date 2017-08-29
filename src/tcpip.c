@@ -67,6 +67,8 @@
 #include <yaz/comstack.h>
 #include <yaz/tcpip.h>
 #include <yaz/errno.h>
+#include <yaz/timing.h>
+#include <yaz/log.h>
 
 #ifndef WIN32
 #define RESOLVER_THREAD 1
@@ -587,6 +589,7 @@ void *tcpip_straddr(COMSTACK h, const char *str)
 {
     tcpip_state *sp = (tcpip_state *)h->cprivate;
     const char *port = "210";
+    yaz_timing_t tim;
 
     if (!tcpip_init())
         return 0;
@@ -615,7 +618,13 @@ void *tcpip_straddr(COMSTACK h, const char *str)
 #endif
     if (sp->ai)
         freeaddrinfo(sp->ai);
+    tim = yaz_timing_create();
+    yaz_timing_start(tim);
     sp->ai = tcpip_getaddrinfo(str, port, &sp->ipv6_only);
+    yaz_timing_stop(tim);
+    yaz_log(YLOG_LOG, "getaddrinfo %s %s %g", str,
+       sp->ai ? "OK" : "FAIL", yaz_timing_get_real(tim));
+    yaz_timing_destroy(&tim);
     if (sp->ai && h->state == CS_ST_UNBND)
     {
         return create_net_socket(h);
